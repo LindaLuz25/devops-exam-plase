@@ -10,7 +10,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'docker-compose build'
+                sh 'docker compose build'
             }
         }
 
@@ -19,7 +19,7 @@ pipeline {
                 script {
                     env.TARGET = (env.ACTIVE_ENV == 'blue') ? 'green' : 'blue'
                     echo "Deploying to ${env.TARGET}..."
-                    sh "docker-compose up -d app-${env.TARGET}"
+                    sh "docker compose up -d app-${env.TARGET}"
                 }
             }
         }
@@ -42,7 +42,7 @@ pipeline {
             steps {
                 script {
                     sh "sed -i 's/app-${env.ACTIVE_ENV}/app-${env.TARGET}/g' nginx/nginx.conf"
-                    sh "docker-compose restart nginx"
+                    sh "docker compose restart nginx"
                     env.ACTIVE_ENV = env.TARGET
                 }
             }
