@@ -17,7 +17,10 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    env.TARGET = (env.ACTIVE_ENV == 'blue') ? 'green' : 'blue'
+                    // Read state from a persistent file
+                    def current = readFile('active_env.txt').trim()
+                    env.TARGET = (current == 'blue') ? 'green' : 'blue'
+                    
                     echo "Deploying to ${env.TARGET}..."
                     sh "docker compose up -d app-${env.TARGET}"
                 }
@@ -41,9 +44,10 @@ pipeline {
         stage('Switch Traffic') {
             steps {
                 script {
-                    sh "sed -i 's/app-${env.ACTIVE_ENV}/app-${env.TARGET}/g' nginx/nginx.conf"
+                    sh "sed -i 's/app-${current}/app-${env.TARGET}/g' nginx/nginx.conf"
                     sh "docker compose restart nginx"
-                    env.ACTIVE_ENV = env.TARGET
+                    // Persist the new state
+                    writeFile(file: 'active_env.txt', text: env.TARGET)
                 }
             }
         }
