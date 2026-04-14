@@ -80,7 +80,9 @@ pipeline {
     post {
         failure {
             script {
-                sh "docker stop app-${INACTIVE} || true"
+                if (env.INACTIVE) {
+                    sh "docker stop app-${INACTIVE} || true"
+                }
             }
         }
     }
