@@ -9,7 +9,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git 'TU_REPO_URL'
+                git 'https://github.com/LindaLuz25/devops-exam-plase.git'
             }
         }
 
