@@ -1,0 +1,87 @@
+pipeline {
+    agent any
+
+    environment {
+        ACTIVE_FILE = "active_env.txt"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git 'TU_REPO_URL'
+            }
+        }
+
+        stage('Detect Active') {
+            steps {
+                script {
+                    if (fileExists(ACTIVE_FILE)) {
+                        ACTIVE = readFile(ACTIVE_FILE).trim()
+                    } else {
+                        ACTIVE = "blue"
+                    }
+
+                    INACTIVE = (ACTIVE == "blue") ? "green" : "blue"
+
+                    env.ACTIVE = ACTIVE
+                    env.INACTIVE = INACTIVE
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh "docker compose -f app/docker-compose.yml up -d app-${INACTIVE}"
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                script {
+                    def port = (INACTIVE == "blue") ? "3001" : "3002"
+                    sleep 5
+
+                    def status = sh(
+                        script: "curl -s -o /dev/null -w \"%{http_code}\" http://localhost:${port}/health",
+                        returnStdout: true
+                    ).trim()
+
+                    if (status != "200") {
+                        error("Health check failed")
+                    }
+                }
+            }
+        }
+
+        stage('Start Infra App (nginx + monitoring)') {
+            steps {
+                sh "docker compose -f app/docker-compose.yml up -d nginx prometheus grafana"
+            }
+        }
+
+        stage('Switch Traffic') {
+            steps {
+                script {
+                    if (INACTIVE == "blue") {
+                        sh "sed -i 's/app-green/app-blue/' app/nginx/nginx.conf"
+                    } else {
+                        sh "sed -i 's/app-blue/app-green/' app/nginx/nginx.conf"
+                    }
+
+                    sh "docker restart nginx"
+
+                    writeFile file: ACTIVE_FILE, text: INACTIVE
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            script {
+                sh "docker stop app-${INACTIVE} || true"
+            }
+        }
+    }
+}

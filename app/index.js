@@ -1,12 +1,21 @@
 const express = require('express');
 const app = express();
-const client = require('prom-client');
 
-// Metrics
-const collectDefaultMetrics = client.collectDefaultMetrics;
-collectDefaultMetrics();
+const PORT = 3000;
 
-app.get('/', (req, res) => res.send('Hello DevOps'));
-app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/', (req, res) => {
+  res.send("Hello DevOps 🚀");
+});
 
-app.listen(3000, () => console.log('App running on port 3000'));
+app.get('/health', (req, res) => {
+  res.status(200).send("OK");
+});
+
+// Para simular fallo
+app.get('/fail', (req, res) => {
+  res.status(500).send("FAIL");
+});
+
+app.listen(PORT, () => {
+  console.log(`App running on port ${PORT}`);
+});
