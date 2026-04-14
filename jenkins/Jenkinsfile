@@ -7,12 +7,6 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                git 'https://github.com/LindaLuz25/devops-exam-plase.git'
-            }
-        }
-
         stage('Detect Active') {
             steps {
                 script {
