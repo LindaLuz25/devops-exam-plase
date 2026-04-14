@@ -17,6 +17,7 @@ services:
 
 networks:
   devops-net:
+    external: true
 
 volumes:
   jenkins_home:
