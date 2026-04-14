@@ -8,10 +8,9 @@ pipeline {
 
     stages {
 
-        stage('Build & Test') {
+        stage('Build') {
             steps {
-                sh 'npm install'
-                sh 'echo "Tests OK"'
+                sh 'docker-compose build'
             }
         }
 
@@ -33,7 +32,7 @@ pipeline {
                         returnStatus: true
                     )
                     if (status != 0) {
-                        error("Health check failed! Rolling back.")
+                        error("Health check failed!")
                     }
                 }
             }
@@ -52,7 +51,7 @@ pipeline {
 
     post {
         failure {
-            echo "Rollback initiated: Keeping traffic on ${env.ACTIVE_ENV}"
+            echo "Rollback: keeping ${env.ACTIVE_ENV}"
         }
     }
 }
