@@ -58,7 +58,11 @@ pipeline {
 
         stage('Start Infra App (nginx + monitoring)') {
             steps {
-                sh "docker compose -f app/docker-compose.yml up -d nginx prometheus grafana"
+                script {
+                    // Usa una ruta absoluta basada en la variable de entorno de Jenkins
+                    def composeFile = "${WORKSPACE}/app/docker-compose.yml"
+                    sh "docker compose -f ${composeFile} up -d nginx prometheus grafana"
+                }
             }
         }
 
