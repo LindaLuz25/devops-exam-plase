@@ -2,7 +2,7 @@ services:
 
   app-blue:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     container_name: app-blue
     ports:
@@ -12,7 +12,7 @@ services:
 
   app-green:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     container_name: app-green
     ports:
@@ -24,7 +24,8 @@ services:
     image: nginx:latest
     container_name: nginx
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      # Usamos el path relativo al archivo, pero añadimos :ro para seguridad
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro 
     ports:
       - "80:80"
     networks:
@@ -34,7 +35,8 @@ services:
     image: prom/prometheus
     container_name: prometheus
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      # Añadimos :ro (read-only) para evitar que Docker toque el archivo
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks:
       - devops-net
 
