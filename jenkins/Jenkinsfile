@@ -79,6 +79,24 @@ pipeline {
             }
         }
 
+        stage('Final Debug') {
+            steps {
+                sh """
+                echo "📁 FULL REPO STRUCTURE:"
+                ls -R .
+
+                echo "📁 APP FOLDER:"
+                ls -R app || true
+
+                echo "📁 MONITORING FOLDER:"
+                ls -R app/monitoring || true
+
+                echo "📁 SEARCH PROMETHEUS:"
+                find . -name "prometheus.yml"
+                """
+            }
+        }
+
 
         stage('Validate Files') {
             steps {
