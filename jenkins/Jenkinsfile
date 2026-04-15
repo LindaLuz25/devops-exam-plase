@@ -84,9 +84,11 @@ pipeline {
 
         stage('Start Infrastructure') {
             steps {
-                script {
-                    // Solo levantamos nginx/monitoreo si la app está saludable
-                    sh "docker compose -f app/docker-compose.yml up -d nginx prometheus grafana"
+                dir('app') { // <--- ESTO ES LO QUE TE FALTA
+                    script {
+                        // Ahora, al ejecutar desde adentro de 'app', las rutas relativas funcionan perfecto
+                        sh "docker compose up -d nginx prometheus grafana"
+                    }
                 }
             }
         }
