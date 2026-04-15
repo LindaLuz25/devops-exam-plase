@@ -118,13 +118,10 @@ EOF
                     echo "🔁 Cambiando tráfico..."
 
                     sh """
-                    # Generar nginx.conf dinámico
                     sed "s/ENV/${INACTIVE}/g" app/nginx/nginx.template.conf > app/nginx/nginx.conf
 
-                    # Copiar config al contenedor
                     docker cp app/nginx/nginx.conf nginx-final:/etc/nginx/nginx.conf
 
-                    # Reiniciar nginx para aplicar cambios
                     docker restart nginx-final
                     """
 
