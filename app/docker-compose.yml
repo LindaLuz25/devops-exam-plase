@@ -35,7 +35,7 @@ services:
     image: prom/prometheus
     container_name: prometheus-final
     volumes:
-    - ${PWD}/prometheus.yml:/etc/prometheus/prometheus.yml
+    - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     command:
     - "--config.file=/etc/prometheus/prometheus.yml"
     ports:
