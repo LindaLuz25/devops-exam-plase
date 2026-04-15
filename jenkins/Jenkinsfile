@@ -13,6 +13,12 @@ pipeline {
                 sh """
                 echo "🧹 Limpieza inicial..."
                 docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
+
+                # elimina contenedores huérfanos específicos
+                docker rm -f prometheus-final nginx-final grafana app-blue app-green || true
+
+                # opcional: limpiar espacio viejo de Jenkins
+                docker system prune -f || true
                 """
             }
         }
@@ -39,24 +45,9 @@ pipeline {
 
                 ls -l app/nginx/ || true
                 ls -l app/monitoring/ || true
-
-                # Crear prometheus.yml si no existe
-                if [ ! -f app/monitoring/prometheus.yml ]; then
-                  echo "⚠️ prometheus.yml no existe, creando..."
-                  mkdir -p app/monitoring
-                  cat <<EOF > app/monitoring/prometheus.yml
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'app'
-    static_configs:
-      - targets: ['app-${ACTIVE}:3000']
-EOF
-                fi
-
+                if [ -f app/monitoring/prometheus.yml ]; then
                 chmod 644 app/monitoring/prometheus.yml
-                chmod 644 app/nginx/nginx.conf || true
+                fi
                 """
             }
         }
@@ -66,7 +57,7 @@ EOF
                 sh """
                 echo "📂 Revisando monitoring..."
                 ls -l app/monitoring || true
-                file app/monitoring/prometheus.yml || true
+                ls -l app/monitoring/prometheus.yml || true
                 cat app/monitoring/prometheus.yml || true
                 """
             }
@@ -108,11 +99,8 @@ EOF
                 sh """
                 echo "📊 Levantando infraestructura..."
 
-                docker compose -f ${COMPOSE_FILE} up -d nginx prometheus grafana
-
-                echo "🔄 Reiniciando servicios..."
-
-                docker restart prometheus-final
+                docker compose -f ${COMPOSE_FILE} up -d nginx prometheus grafana \
+                --force-recreate --remove-orphans --no-deps
                 """
             }
         }
@@ -145,7 +133,8 @@ EOF
                 echo "🚨 Fallo detectado. Rollback..."
 
                 sh """
-                docker compose -f ${COMPOSE_FILE} rm -f -s app-${INACTIVE} || true
+                docker compose -f ${COMPOSE_FILE} down -v --remove-orphans || true
+                docker rm -f prometheus-final nginx-final grafana app-blue app-green || true
                 """
 
                 echo "♻️ Sistema limpio"
