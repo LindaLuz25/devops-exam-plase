@@ -61,6 +61,17 @@ EOF
             }
         }
 
+        stage('Debug Files') {
+            steps {
+                sh """
+                echo "📂 Revisando monitoring..."
+                ls -l app/monitoring || true
+                file app/monitoring/prometheus.yml || true
+                cat app/monitoring/prometheus.yml || true
+                """
+            }
+        }
+
         stage('Deploy App') {
             steps {
                 script {
