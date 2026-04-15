@@ -88,13 +88,18 @@ pipeline {
             }
         }
     }
-
+    
     post {
+        success {
+            echo "Despliegue exitoso. Limpiando entorno..."
+            // Opcional: Podrías eliminar el contenedor antiguo en lugar de solo detenerlo
+            // sh "docker compose -f app/docker-compose.yml rm -f app-${env.ACTIVE}"
+        }
         failure {
             script {
-                if (env.INACTIVE) {
-                    sh "docker stop app-${INACTIVE} || true"
-                }
+                echo "Error detectado. Limpiando contenedor fallido: ${env.INACTIVE}"
+                sh "docker compose -f app/docker-compose.yml stop app-${env.INACTIVE} || true"
+                sh "docker compose -f app/docker-compose.yml rm -f app-${env.INACTIVE} || true"
             }
         }
     }
