@@ -11,7 +11,7 @@ pipeline {
                 sh 'ls -l app/nginx/nginx.conf'
             }
         }
-        
+
         stage('Detect Active') {
             steps {
                 script {
@@ -49,6 +49,54 @@ pipeline {
                         // Al lanzar 'error', Jenkins detiene el pipeline y salta directo al post { failure }
                         error("Health check falló: ${status}")
                     }
+                }
+            }
+        }
+
+        stage('Clean and Prepare') {
+            steps {
+                script {
+                    echo "🧹 Limpiando residuos de Docker y preparando configuraciones..."
+                    
+                    // 1. Eliminar contenedores antiguos que puedan estar bloqueando los montajes
+                    sh "docker rm -f nginx prometheus grafana || true"
+                    
+                    // 2. Forzar la eliminación de carpetas erróneas (si existen)
+                    sh "sudo rm -rf app/nginx/nginx.conf"
+                    sh "sudo rm -rf app/monitoring/prometheus.yml"
+                    
+                    // 3. Crear archivos planos (esto garantiza que sean archivos y no directorios)
+                    sh "touch app/nginx/nginx.conf"
+                    sh "touch app/monitoring/prometheus.yml"
+                    
+                    // 4. Inyectar contenido real (Usamos 'cat' para escribir el archivo)
+                    // Esto evita depender de que el archivo exista previamente en el FS del host
+                    sh '''
+                            cat <<EOF > app/nginx/nginx.conf
+                        events { worker_connections 1024; }
+                        http {
+                            upstream app {
+                                server app-blue:3000;
+                                server app-green:3000;
+                            }
+                            server {
+                                listen 80;
+                                location / {
+                                    proxy_pass http://app;
+                                }
+                            }
+                        }
+                        EOF
+                                                cat <<EOF > app/monitoring/prometheus.yml
+                        global:
+                        scrape_interval: 5s
+                        scrape_configs:
+                        - job_name: 'node-app'
+                            static_configs:
+                            - targets: ['app-blue:3000', 'app-green:3000']
+                        EOF
+                    '''
+                    echo "✅ Entorno preparado exitosamente."
                 }
             }
         }
