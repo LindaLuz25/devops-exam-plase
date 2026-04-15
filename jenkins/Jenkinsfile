@@ -6,6 +6,12 @@ pipeline {
     }
 
     stages {
+        stage('Verificar') {
+            steps {
+                sh 'ls -l app/nginx/nginx.conf'
+            }
+        }
+        
         stage('Detect Active') {
             steps {
                 script {
