@@ -118,10 +118,14 @@ EOF
                     echo "🔁 Cambiando tráfico..."
 
                     sh """
-                    sed 's/app-${ACTIVE}/app-${INACTIVE}/g' app/nginx/nginx.conf > app/nginx/nginx.tmp
-                    mv app/nginx/nginx.tmp app/nginx/nginx.conf
+                    # Generar nginx.conf dinámico
+                    sed "s/ENV/${INACTIVE}/g" app/nginx/nginx.template.conf > app/nginx/nginx.conf
 
-                    docker compose -f ${COMPOSE_FILE} restart nginx
+                    # Copiar config al contenedor
+                    docker cp app/nginx/nginx.conf nginx-final:/etc/nginx/nginx.conf
+
+                    # Reiniciar nginx para aplicar cambios
+                    docker restart nginx-final
                     """
 
                     writeFile file: ACTIVE_FILE, text: env.INACTIVE
