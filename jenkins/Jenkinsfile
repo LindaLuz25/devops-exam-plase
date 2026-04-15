@@ -83,6 +83,24 @@ pipeline {
             }
         }
 
+        stage('Debug Workspace') {
+     steps {
+        sh """
+        echo "📂 WORKSPACE:"
+        pwd
+
+        echo "📁 CONTENIDO COMPLETO:"
+        ls -R .
+
+        echo "📁 APP:"
+        ls -R app || true
+
+        echo "📁 MONITORING:"
+        ls -R app/monitoring || true
+        """
+    }
+}
+
         stage('Deploy App') {
             steps {
                 script {
