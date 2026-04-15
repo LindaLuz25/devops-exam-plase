@@ -11,14 +11,13 @@ pipeline {
         stage('Pre-Build Clean') {
             steps {
                 sh """
-                echo "🧹 Limpieza inicial..."
-                docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
-
-                # elimina contenedores huérfanos específicos
+                echo "🧹 Limpieza total del entorno Docker...
+                # 1. Detener y eliminar todo del compose
+                docker compose -f ${COMPOSE_FILE} down -v --remove-orphans || true
+                # 2. Eliminar contenedores específicos del proyecto
                 docker rm -f prometheus-final nginx-final grafana app-blue app-green || true
-
-                # opcional: limpiar espacio viejo de Jenkins
-                docker system prune -f || true
+                # 3. LIMPIEZA PROFUNDA (lo que te faltaba)
+                docker system prune -af --volumes || true
                 """
             }
         }
