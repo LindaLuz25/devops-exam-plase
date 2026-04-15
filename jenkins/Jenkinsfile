@@ -6,6 +6,13 @@ pipeline {
     }
 
     stages {
+        stage('Pre-Build Clean') {
+            steps {
+                // Esto borra cualquier contenedor huérfano antes de empezar
+                sh "docker compose -f app/docker-compose.yml down --remove-orphans || true"
+            }
+        }
+        
         stage('Verificar') {
             steps {
                 sh 'ls -l app/nginx/nginx.conf'
@@ -128,17 +135,22 @@ pipeline {
     post {
         failure {
             script {
-                echo "🚨 Error detectado. Ejecutando limpieza profunda..."
+                echo "🚨 ERROR DETECTADO: Limpiando contenedores fallidos para evitar conflictos..."
                 
-                // 1. Apagamos y eliminamos el contenedor que falló
-                sh "docker compose -f app/docker-compose.yml stop app-${env.INACTIVE} || true"
-                sh "docker compose -f app/docker-compose.yml rm -f app-${env.INACTIVE} || true"
+                // Borramos el contenedor de la aplicación que falló (INACTIVE)
+                // 'rm -f' detiene y elimina el contenedor en un solo paso
+                sh "docker compose -f app/docker-compose.yml rm -f -s app-${env.INACTIVE} || true"
                 
-                // 2. Opcional: Si nginx estaba encendido, forzamos un reinicio para que no se quede pegado al contenedor fallido
-                sh "docker compose -f app/docker-compose.yml restart nginx || true"
-                
-                echo "Entorno limpio. Puedes intentar ejecutar el build nuevamente."
+                // También es buena idea limpiar el activo si sospechas que el error es global
+                // sh "docker compose -f app/docker-compose.yml rm -f -s app-${env.ACTIVE} || true"
+
+                echo "♻️ Sistema purgado. El próximo build encontrará un entorno limpio."
             }
+        }
+        success {
+            echo "✅ Despliegue exitoso."
+            // Opcional: Si quieres borrar el contenedor de la versión anterior para ahorrar RAM:
+            // sh "docker compose -f app/docker-compose.yml rm -f -s app-${env.ACTIVE} || true"
         }
     }
 }
