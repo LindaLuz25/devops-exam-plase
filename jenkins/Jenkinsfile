@@ -92,6 +92,20 @@ EOF
             }
         }
 
+         stage('Start Infrastructure') {
+            steps {
+                sh """
+                echo "📊 Levantando infraestructura..."
+
+                docker compose -f ${COMPOSE_FILE} up -d nginx prometheus grafana
+
+                echo "🔄 Reiniciando servicios..."
+
+                docker restart prometheus-final
+                """
+            }
+        }
+
         stage('Switch Traffic') {
             steps {
                 script {
@@ -109,20 +123,6 @@ EOF
 
                     echo "✅ Tráfico ahora en ${env.INACTIVE}"
                 }
-            }
-        }
-
-        stage('Start Infrastructure') {
-            steps {
-                sh """
-                echo "📊 Levantando infraestructura..."
-
-                docker compose -f ${COMPOSE_FILE} up -d nginx prometheus grafana
-
-                echo "🔄 Reiniciando servicios..."
-
-                docker restart prometheus-final
-                """
             }
         }
     }
