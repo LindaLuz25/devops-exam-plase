@@ -10,16 +10,13 @@ pipeline {
         stage('Detect Active') {
             steps {
                 script {
-                    if (fileExists(ACTIVE_FILE)) {
-                        ACTIVE = readFile(ACTIVE_FILE).trim()
-                    } else {
-                        ACTIVE = "blue"
-                    }
+                    // Usa 'def' para variables locales al script
+                    def activeVal = fileExists(ACTIVE_FILE) ? readFile(ACTIVE_FILE).trim() : "blue"
+                    def inactiveVal = (activeVal == "blue") ? "green" : "blue"
 
-                    INACTIVE = (ACTIVE == "blue") ? "green" : "blue"
-
-                    env.ACTIVE = ACTIVE
-                    env.INACTIVE = INACTIVE
+                    // Usa 'env.' para que las variables sobrevivan entre stages
+                    env.ACTIVE = activeVal
+                    env.INACTIVE = inactiveVal
                 }
             }
         }
