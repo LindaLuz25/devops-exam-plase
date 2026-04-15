@@ -6,25 +6,23 @@ pipeline {
     }
 
     stages {
-
         stage('Detect Active') {
             steps {
                 script {
-                    // Usa 'def' para variables locales al script
                     def activeVal = fileExists(ACTIVE_FILE) ? readFile(ACTIVE_FILE).trim() : "blue"
                     def inactiveVal = (activeVal == "blue") ? "green" : "blue"
 
-                    // Usa 'env.' para que las variables sobrevivan entre stages
                     env.ACTIVE = activeVal
                     env.INACTIVE = inactiveVal
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy App') {
             steps {
                 script {
-                    // Levantamos el contenedor inactivo sin mapear puertos al host (innecesario)
+                    echo "Desplegando en: ${env.INACTIVE}"
+                    // Intentamos levantar el contenedor. Si falla, el post { failure } se encargará
                     sh "docker compose -f app/docker-compose.yml up -d app-${env.INACTIVE}"
                 }
             }
@@ -33,12 +31,7 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    // IMPORTANTE: Usamos el nombre del servicio (app-blue/green) en lugar de localhost
-                    // Jenkins puede resolver los nombres de servicio si están en la misma red
                     def targetUrl = "http://app-${env.INACTIVE}:3000/health"
-                    echo "Verificando salud en: ${targetUrl}"
-                    
-                    // Espera de cortesía para que Node.js inicie
                     sleep 10 
                     
                     def status = sh(
@@ -47,18 +40,18 @@ pipeline {
                     ).trim()
 
                     if (status != "200") {
-                        error("Health check failed con código: ${status}")
+                        // Al lanzar 'error', Jenkins detiene el pipeline y salta directo al post { failure }
+                        error("Health check falló: ${status}")
                     }
                 }
             }
         }
 
-        stage('Start Infra App (nginx + monitoring)') {
+        stage('Start Infrastructure') {
             steps {
                 script {
-                    // Usa una ruta absoluta basada en la variable de entorno de Jenkins
-                    def composeFile = "${WORKSPACE}/app/docker-compose.yml"
-                    sh "docker compose -f ${composeFile} up -d nginx prometheus grafana"
+                    // Solo levantamos nginx/monitoreo si la app está saludable
+                    sh "docker compose -f app/docker-compose.yml up -d nginx prometheus grafana"
                 }
             }
         }
@@ -66,37 +59,31 @@ pipeline {
         stage('Switch Traffic') {
             steps {
                 script {
-                    echo "Cambiando tráfico de ${env.ACTIVE} a ${env.INACTIVE}"
-                    
-                    // Usamos un archivo temporal para generar el nuevo nginx.conf
-                    // Esto evita que el 'sed' corrompa el archivo original con cada ejecución
                     sh """
                         sed 's/app-${env.ACTIVE}/app-${env.INACTIVE}/g' app/nginx/nginx.conf > app/nginx/nginx.conf.tmp
                         mv app/nginx/nginx.conf.tmp app/nginx/nginx.conf
                         docker compose -f app/docker-compose.yml restart nginx
                     """
-
-                    // Guardar estado
                     writeFile file: ACTIVE_FILE, text: env.INACTIVE
-                    
-                    // Opcional: Detener el contenedor antiguo para ahorrar recursos
-                    sh "docker compose -f app/docker-compose.yml stop app-${env.ACTIVE}"
+                    echo "Tráfico cambiado exitosamente a ${env.INACTIVE}"
                 }
             }
         }
     }
-    
+
     post {
-        success {
-            echo "Despliegue exitoso. Limpiando entorno..."
-            // Opcional: Podrías eliminar el contenedor antiguo en lugar de solo detenerlo
-            // sh "docker compose -f app/docker-compose.yml rm -f app-${env.ACTIVE}"
-        }
         failure {
             script {
-                echo "Error detectado. Limpiando contenedor fallido: ${env.INACTIVE}"
+                echo "🚨 Error detectado. Ejecutando limpieza profunda..."
+                
+                // 1. Apagamos y eliminamos el contenedor que falló
                 sh "docker compose -f app/docker-compose.yml stop app-${env.INACTIVE} || true"
                 sh "docker compose -f app/docker-compose.yml rm -f app-${env.INACTIVE} || true"
+                
+                // 2. Opcional: Si nginx estaba encendido, forzamos un reinicio para que no se quede pegado al contenedor fallido
+                sh "docker compose -f app/docker-compose.yml restart nginx || true"
+                
+                echo "Entorno limpio. Puedes intentar ejecutar el build nuevamente."
             }
         }
     }
