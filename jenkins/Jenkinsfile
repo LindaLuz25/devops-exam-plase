@@ -3,19 +3,17 @@ pipeline {
 
     environment {
         ACTIVE_FILE = "active_env.txt"
+        COMPOSE_FILE = "app/docker-compose.yml"
     }
 
     stages {
+
         stage('Pre-Build Clean') {
             steps {
-                // Esto borra cualquier contenedor huérfano antes de empezar
-                sh "docker compose -f app/docker-compose.yml down --remove-orphans || true"
-            }
-        }
-
-        stage('Verificar') {
-            steps {
-                sh 'ls -l app/nginx/nginx.conf'
+                sh """
+                echo "🧹 Limpieza inicial..."
+                docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
+                """
             }
         }
 
@@ -27,16 +25,47 @@ pipeline {
 
                     env.ACTIVE = activeVal
                     env.INACTIVE = inactiveVal
+
+                    echo "Activo: ${env.ACTIVE}"
+                    echo "Nuevo despliegue: ${env.INACTIVE}"
                 }
+            }
+        }
+
+        stage('Validate Files') {
+            steps {
+                sh """
+                echo "🔍 Verificando archivos..."
+
+                ls -l app/nginx/ || true
+                ls -l app/monitoring/ || true
+
+                # Crear prometheus.yml si no existe
+                if [ ! -f app/monitoring/prometheus.yml ]; then
+                  echo "⚠️ prometheus.yml no existe, creando..."
+                  mkdir -p app/monitoring
+                  cat <<EOF > app/monitoring/prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'app'
+    static_configs:
+      - targets: ['app-${ACTIVE}:3000']
+EOF
+                fi
+
+                chmod 644 app/monitoring/prometheus.yml
+                chmod 644 app/nginx/nginx.conf || true
+                """
             }
         }
 
         stage('Deploy App') {
             steps {
                 script {
-                    echo "Desplegando en: ${env.INACTIVE}"
-                    // Intentamos levantar el contenedor. Si falla, el post { failure } se encargará
-                    sh "docker compose -f app/docker-compose.yml up -d app-${env.INACTIVE}"
+                    echo "🚀 Desplegando app-${env.INACTIVE}..."
+                    sh "docker compose -f ${COMPOSE_FILE} up -d app-${env.INACTIVE}"
                 }
             }
         }
@@ -44,96 +73,76 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    def targetUrl = "http://app-${env.INACTIVE}:3000/health"
-                    sleep 10 
-                    
+                    def url = "http://app-${env.INACTIVE}:3000/health"
+
+                    echo "⏳ Esperando a que la app responda..."
+                    sleep 10
+
                     def status = sh(
-                        script: "curl -s -o /dev/null -w '%{http_code}' ${targetUrl}",
+                        script: "curl -s -o /dev/null -w '%{http_code}' ${url}",
                         returnStdout: true
                     ).trim()
 
-                    if (status != "200") {
-                        // Al lanzar 'error', Jenkins detiene el pipeline y salta directo al post { failure }
-                        error("Health check falló: ${status}")
-                    }
-                }
-            }
-        }
+                    echo "Status: ${status}"
 
-        stage('Clean and Prepare') {
-            steps {
-                script {
-                    echo "🧹 Verificando y limpiando entorno..."
-                    
-                    // 1. Borrar contenedores previos (sin sudo)
-                    sh "docker rm -f nginx prometheus grafana || true"
-                    
-                    // 2. CORRECCIÓN: Si Docker creó carpetas por error, las eliminamos
-                    // Esto es necesario para que el montaje del 'docker compose' funcione
-                    sh '[ -d app/nginx/nginx.conf ] && rm -rf app/nginx/nginx.conf || true'
-                    sh '[ -d app/monitoring/prometheus.yml ] && rm -rf app/monitoring/prometheus.yml || true'
-                    
-                    // 3. Asegurar que los archivos tengan permisos correctos para que Docker los lea
-                    sh "chmod 644 app/nginx/nginx.conf"
-                    sh "chmod 644 app/monitoring/prometheus.yml"
-                    
-                    echo "✅ Entorno listo para el despliegue."
+                    if (status != "200") {
+                        error("❌ Health check falló")
+                    }
                 }
             }
         }
 
         stage('Start Infrastructure') {
             steps {
-                dir('app') {
-                    script {
-                        // 1. Levantamos el contenedor SIN volumen
-                        sh "docker compose up -d nginx prometheus grafana"
-                        
-                        // 2. Copiamos la configuración desde el host al contenedor activo
-                        // Esto ignora el error de "not a directory" porque no usamos montaje
-                        sh "docker cp nginx/nginx.conf nginx-final:/etc/nginx/nginx.conf"
-                        
-                        // 3. Reiniciamos para aplicar cambios
-                        sh "docker restart nginx-final"
-                    }
-                }
+                sh """
+                echo "📊 Levantando infraestructura..."
+
+                docker compose -f ${COMPOSE_FILE} up -d nginx prometheus grafana
+
+                # Copiar nginx.conf manualmente
+                docker cp app/nginx/nginx.conf nginx-final:/etc/nginx/nginx.conf
+
+                docker restart nginx-final
+                """
             }
         }
 
         stage('Switch Traffic') {
             steps {
                 script {
+                    echo "🔁 Cambiando tráfico..."
+
                     sh """
-                        sed 's/app-${env.ACTIVE}/app-${env.INACTIVE}/g' app/nginx/nginx.conf > app/nginx/nginx.conf.tmp
-                        mv app/nginx/nginx.conf.tmp app/nginx/nginx.conf
-                        docker compose -f app/docker-compose.yml restart nginx
+                    sed 's/app-${ACTIVE}/app-${INACTIVE}/g' app/nginx/nginx.conf > app/nginx/nginx.tmp
+                    mv app/nginx/nginx.tmp app/nginx/nginx.conf
+
+                    docker compose -f ${COMPOSE_FILE} restart nginx
                     """
+
                     writeFile file: ACTIVE_FILE, text: env.INACTIVE
-                    echo "Tráfico cambiado exitosamente a ${env.INACTIVE}"
+
+                    echo "✅ Tráfico ahora en ${env.INACTIVE}"
                 }
             }
         }
     }
 
     post {
+
         failure {
             script {
-                echo "🚨 ERROR DETECTADO: Limpiando contenedores fallidos para evitar conflictos..."
-                
-                // Borramos el contenedor de la aplicación que falló (INACTIVE)
-                // 'rm -f' detiene y elimina el contenedor en un solo paso
-                sh "docker compose -f app/docker-compose.yml rm -f -s app-${env.INACTIVE} || true"
-                
-                // También es buena idea limpiar el activo si sospechas que el error es global
-                // sh "docker compose -f app/docker-compose.yml rm -f -s app-${env.ACTIVE} || true"
+                echo "🚨 Fallo detectado. Rollback..."
 
-                echo "♻️ Sistema purgado. El próximo build encontrará un entorno limpio."
+                sh """
+                docker compose -f ${COMPOSE_FILE} rm -f -s app-${INACTIVE} || true
+                """
+
+                echo "♻️ Sistema limpio"
             }
         }
+
         success {
-            echo "✅ Despliegue exitoso."
-            // Opcional: Si quieres borrar el contenedor de la versión anterior para ahorrar RAM:
-            // sh "docker compose -f app/docker-compose.yml rm -f -s app-${env.ACTIVE} || true"
+            echo "🎉 Deploy exitoso!"
         }
     }
 }
