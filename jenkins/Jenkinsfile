@@ -4,19 +4,31 @@ pipeline {
     environment {
         ACTIVE_FILE = "active_env.txt"
         COMPOSE_FILE = "app/docker-compose.yml"
+        NETWORK = "devops-net"
     }
 
     stages {
 
+        stage('Init Network') {
+            steps {
+                sh """
+                echo "🌐 Verificando red..."
+
+                docker network inspect ${NETWORK} >/dev/null 2>&1 || \
+                docker network create ${NETWORK}
+
+                docker network ls | grep ${NETWORK}
+                """
+            }
+        }
+
         stage('Pre-Build Clean') {
             steps {
                 sh """
-                echo "🧹 Limpieza total del entorno Docker..."
+                echo "🧹 Limpieza controlada..."
 
-                # 1. Detener y eliminar todo del compose
                 docker compose -f ${COMPOSE_FILE} down -v --remove-orphans || true
 
-                # 2. Eliminar contenedores específicos del proyecto
                 docker rm -f prometheus-final nginx-final grafana app-blue app-green || true
                 """
             }
@@ -40,24 +52,27 @@ pipeline {
         stage('Validate Files') {
             steps {
                 sh """
-                echo "🔍 Verificando archivos..."
+                echo "🔍 Validando archivos críticos..."
 
-                ls -l app/nginx/ || true
-                ls -l app/monitoring/ || true
-                if [ -f app/monitoring/prometheus.yml ]; then
-                chmod 644 app/monitoring/prometheus.yml
+                # Prometheus
+                if [ ! -f app/monitoring/prometheus.yml ]; then
+                  echo "❌ prometheus.yml no existe"
+                  exit 1
                 fi
-                """
-            }
-        }
 
-        stage('Debug Files') {
-            steps {
-                sh """
-                echo "📂 Revisando monitoring..."
-                ls -l app/monitoring || true
-                ls -l app/monitoring/prometheus.yml || true
-                cat app/monitoring/prometheus.yml || true
+                # Validar que NO sea directorio
+                if [ -d app/monitoring/prometheus.yml ]; then
+                  echo "❌ prometheus.yml es una carpeta"
+                  exit 1
+                fi
+
+                chmod 644 app/monitoring/prometheus.yml
+
+                # Nginx template
+                if [ ! -f app/nginx/nginx.template.conf ]; then
+                  echo "❌ nginx.template.conf no existe"
+                  exit 1
+                fi
                 """
             }
         }
@@ -77,14 +92,23 @@ pipeline {
                     def url = "http://app-${env.INACTIVE}:3000/health"
 
                     echo "⏳ Esperando a que la app responda..."
-                    sleep 10
 
-                    def status = sh(
-                        script: "curl -s -o /dev/null -w '%{http_code}' ${url}",
-                        returnStdout: true
-                    ).trim()
+                    def retries = 10
+                    def status = "000"
 
-                    echo "Status: ${status}"
+                    for (int i = 0; i < retries; i++) {
+                        sleep 5
+                        status = sh(
+                            script: "curl -s -o /dev/null -w '%{http_code}' ${url} || true",
+                            returnStdout: true
+                        ).trim()
+
+                        echo "Intento ${i+1}: ${status}"
+
+                        if (status == "200") {
+                            break
+                        }
+                    }
 
                     if (status != "200") {
                         error("❌ Health check falló")
@@ -93,7 +117,7 @@ pipeline {
             }
         }
 
-         stage('Start Infrastructure') {
+        stage('Start Infrastructure') {
             steps {
                 sh """
                 echo "📊 Levantando infraestructura..."
@@ -129,7 +153,7 @@ pipeline {
 
         failure {
             script {
-                echo "🚨 Fallo detectado. Rollback..."
+                echo "🚨 Rollback..."
 
                 sh """
                 docker compose -f ${COMPOSE_FILE} down -v --remove-orphans || true
