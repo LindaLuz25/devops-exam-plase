@@ -17,7 +17,10 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                cleanWs()
+                sh """
+                echo "🧹 limpiando solo basura, NO repo"
+                rm -rf node_modules || true
+                """
             }
         }
 
