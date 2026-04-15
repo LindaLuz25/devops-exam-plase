@@ -23,9 +23,9 @@ services:
   nginx:
     image: nginx:latest
     container_name: nginx-final
-    volumes:
+    # volumes:
       # Usamos el path relativo al archivo, pero añadimos :ro para seguridad
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro 
+      #- ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "80:80"
     networks:

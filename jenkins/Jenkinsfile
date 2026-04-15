@@ -84,10 +84,17 @@ pipeline {
 
         stage('Start Infrastructure') {
             steps {
-                dir('app') { // <--- ESTO ES LO QUE TE FALTA
+                dir('app') {
                     script {
-                        // Ahora, al ejecutar desde adentro de 'app', las rutas relativas funcionan perfecto
+                        // 1. Levantamos el contenedor SIN volumen
                         sh "docker compose up -d nginx prometheus grafana"
+                        
+                        // 2. Copiamos la configuración desde el host al contenedor activo
+                        // Esto ignora el error de "not a directory" porque no usamos montaje
+                        sh "docker cp nginx/nginx.conf nginx-final:/etc/nginx/nginx.conf"
+                        
+                        // 3. Reiniciamos para aplicar cambios
+                        sh "docker restart nginx-final"
                     }
                 }
             }
