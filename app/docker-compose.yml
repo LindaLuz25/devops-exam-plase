@@ -34,9 +34,10 @@ services:
   prometheus:
     image: prom/prometheus
     container_name: prometheus-final
-    #volumes:
-      # Añadimos :ro (read-only) para evitar que Docker toque el archivo
-      #- ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    volumes:
+    - ./app/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
     networks:
       - devops-net
 
