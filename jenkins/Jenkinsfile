@@ -96,6 +96,18 @@ pipeline {
                 """
             }
         }
+        stage('Verify Git Content') {
+            steps {
+                sh """
+                echo "📌 GIT INFO:"
+                git branch || true
+                git remote -v || true
+
+                echo "📌 GIT LS TREE:"
+                git ls-tree -r HEAD --name-only || true
+                """
+            }
+        }
 
 
         stage('Validate Files') {
