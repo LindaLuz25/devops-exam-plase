@@ -51,4 +51,3 @@ services:
 
 networks:
   devops-net:
-    external: true
