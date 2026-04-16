@@ -32,17 +32,15 @@ services:
       - devops-net
 
   prometheus:
-    image: prom/prometheus
+    build: 
+      context: .
+      dockerfile: monitoring/Dockerfile # O donde pongas el Dockerfile
     container_name: prometheus-final
-    volumes:
-      - ./monitoring:/etc/prometheus_config:ro
-    command:
-      - "--config.file=/etc/prometheus_config/prometheus.yml"
     ports:
       - "9090:9090"
     networks:
       - devops-net
-
+      
   grafana:
     image: grafana/grafana
     container_name: grafana
