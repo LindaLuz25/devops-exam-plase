@@ -34,13 +34,13 @@ services:
   prometheus:
     build: 
       context: .
-      dockerfile: monitoring/Dockerfile # O donde pongas el Dockerfile
+      dockerfile: monitoring/Dockerfile 
     container_name: prometheus-final
     ports:
       - "9090:9090"
     networks:
       - devops-net
-      
+
   grafana:
     image: grafana/grafana
     container_name: grafana

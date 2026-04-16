@@ -1,2 +1,2 @@
-FROM prom/prometheus
-COPY prometheus.yml /etc/prometheus/prometheus.yml
+FROM prom/prometheus:latest
+COPY monitoring/prometheus.yml /etc/prometheus/prometheus.yml
